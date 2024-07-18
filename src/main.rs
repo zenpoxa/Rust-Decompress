@@ -1,35 +1,30 @@
-use std::fs;
-use std::io;
+use core::arch;
+use std::{fs, io, process::Command};
 
 fn main() {
-    
-    //process the real program in the real_main function
-    //for clean end and exit use this in the main function
-    std::process::exit(real_main());
+
+    std::process::exit(real_main())
 }
 
 fn real_main() -> i32 {
-    //create a vector called args to collect users input in the CLI
+
     let args: Vec<_> = std::env::args().collect();
-    //if args less than 2, there's an issue because  you need to send the name of the 
-    // zip file and it'll show you how to use
+
+    // vérifier qu'il y a bien un argument passé en paramètre
     if args.len() < 2 {
-        println!("Usage: {} <filename>", args[0]);
+        println!("Aucun fichier indiqué pour être décompressé. Utilisation : {} <nom_fichier.zip>", args[0]);
         return 1;
     }
-    //args at the 2nd position, denoted by 1st index is the file name 
-    let fname = std::path::Path::new(&*args[1]);
-    //open the file using standard fs
-    let file = fs::File::open(&fname).unwrap();
 
-    //using the archive reader function
+    // Ici, un fichier zip à bien été inidiqué en paramètre
+
+    let fname = std::path::Path::new(&*args[1]);
+    let file = fs::File::open(&fname).unwrap();
     let mut archive = zip::ZipArchive::new(file).unwrap();
 
-//start from 0 and cover the entire length of archive
-// there will be multiple files in the zip archive and we need to extract all
     for i in 0..archive.len() {
         let mut file = archive.by_index(i).unwrap();
-    //setting the path where the files will be extracted
+
         let outpath = match file.enclosed_name() {
             Some(path) => path.to_owned(),
             None => continue,
@@ -38,32 +33,31 @@ fn real_main() -> i32 {
         {
             let comment = file.comment();
             if !comment.is_empty() {
-                println!("File {} comment: {}", i, comment);
+                println!("Fichier {} commentaire : {}", file.name(), comment);
             }
         }
-//the zip can contain other folders too
+
+        // cas du dossier
         if (*file.name()).ends_with('/') {
-            println!("File {} extracted to \"{}\"", i, outpath.display());
-    //recursively create a new directory
-            fs::create_dir_all(&outpath).unwrap();
-        } else {
-            println!(
-                "File {} extracted to \"{}\" ({} bytes)",
-                i,
-                outpath.display(),
-                file.size()
-            );
-            //if there is no parent for those files, create a new directory
+            println!("Dossier {} extrait vers \"{}\"", file.name(), outpath.display());
+            if !outpath.exists() {
+                fs::create_dir(&outpath).unwrap();
+            }
+        }
+        // cas du fichier
+        else {
+            println!("Fichier {} extrait vers \"{}\", ({} octets)", file.name(), outpath.display(), file.size());
+
             if let Some(p) = outpath.parent() {
                 if !p.exists() {
                     fs::create_dir_all(&p).unwrap();
                 }
             }
+
             let mut outfile = fs::File::create(&outpath).unwrap();
             io::copy(&mut file, &mut outfile).unwrap();
         }
 
-        // Get and Set permissions for the extracted files
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -72,6 +66,8 @@ fn real_main() -> i32 {
                 fs::set_permissions(&outpath, fs::Permissions::from_mode(mode)).unwrap();
             }
         }
+
+        
     }
 
     0
